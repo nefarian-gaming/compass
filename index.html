@@ -82,48 +82,74 @@
         <p>🔄 Compass data is sent every 5 seconds</p>
     </div>
 
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
     <script>
-        const MQTT_ENDPOINT = "https://www-dev.seag.cloud:8080/api/v1/zXKJxdn3i2yeTZdwKbgS/telemetry";
+        // MQTT Configuration
+        const MQTT_BROKER = 'mqtt-dev.seag.cloud';
+        const MQTT_PORT = 8083; // WebSocket port (usually 8083 for MQTT over WebSocket)
+        const MQTT_TOPIC = 'v1/devices/me/telemetry';
+        const MQTT_USERNAME = 'zXKJxdn3i2yeTZdwKbgS';
 
         let currentHeading = 0;
-        let serverConnected = false;
+        let mqttClient = null;
         let lastSentHeading = null;
 
-        // Send heading data to MQTT endpoint
+        // Initialize MQTT connection
+        function initMQTT() {
+            const mqttUrl = `ws://${MQTT_BROKER}:${MQTT_PORT}`;
+
+            mqttClient = mqtt.connect(mqttUrl, {
+                username: MQTT_USERNAME,
+                clean: true,
+                connectTimeout: 4000,
+                reconnectPeriod: 1000,
+            });
+
+            mqttClient.on('connect', function () {
+                console.log('Connected to MQTT broker');
+                document.getElementById('mqtt-status').innerHTML = '✅ Connected to MQTT';
+                document.getElementById('mqtt-status').className = 'connected';
+            });
+
+            mqttClient.on('error', function (error) {
+                console.error('MQTT connection error:', error);
+                document.getElementById('mqtt-status').innerHTML = `❌ MQTT error: ${error.message}`;
+                document.getElementById('mqtt-status').className = 'disconnected';
+            });
+
+            mqttClient.on('offline', function () {
+                console.log('MQTT client offline');
+                document.getElementById('mqtt-status').innerHTML = '❌ MQTT offline';
+                document.getElementById('mqtt-status').className = 'disconnected';
+            });
+
+            mqttClient.on('reconnect', function () {
+                console.log('MQTT reconnecting...');
+                document.getElementById('mqtt-status').innerHTML = '🔄 MQTT reconnecting...';
+                document.getElementById('mqtt-status').className = 'permission';
+            });
+        }
+
+        // Send heading data via MQTT
         function sendHeading(heading) {
             // Only send if heading changed significantly (avoid spam)
             if (lastSentHeading !== null && Math.abs(heading - lastSentHeading) < 5) {
                 return;
             }
 
-            const data = { heading: heading };
-
-            fetch(MQTT_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => {
-                if (response.ok) {
-                    if (!serverConnected) {
-                        document.getElementById('mqtt-status').innerHTML = '✅ Connected to MQTT';
-                        document.getElementById('mqtt-status').className = 'connected';
-                        serverConnected = true;
+            if (mqttClient && mqttClient.connected) {
+                const data = { heading: heading };
+                mqttClient.publish(MQTT_TOPIC, JSON.stringify(data), { qos: 1 }, function (error) {
+                    if (error) {
+                        console.error('Error publishing to MQTT:', error);
+                    } else {
+                        console.log('Heading sent via MQTT:', heading);
+                        lastSentHeading = heading;
                     }
-                    lastSentHeading = heading;
-                    console.log("Heading sent:", heading);
-                } else {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-            })
-            .catch(error => {
-                console.error("Error sending to MQTT:", error);
-                document.getElementById('mqtt-status').innerHTML = '❌ MQTT connection error';
-                document.getElementById('mqtt-status').className = 'disconnected';
-                serverConnected = false;
-            });
+                });
+            } else {
+                console.log('MQTT client not connected, cannot send heading');
+            }
         }
 
         // Handle device orientation
@@ -174,10 +200,8 @@
             }
         }, 5000);
 
-        // Test connection on load
-        setTimeout(() => {
-            sendHeading(0);
-        }, 1000);
+        // Initialize MQTT connection on load
+        initMQTT();
     </script>
 </body>
 </html>

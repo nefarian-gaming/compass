@@ -82,114 +82,53 @@
         <p>🔄 Compass data is sent every 5 seconds</p>
     </div>
 
-    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
     <script>
-        // MQTT Configuration
-        const MQTT_BROKER = 'mqtt-dev.seag.cloud';
-        const MQTT_PORTS = [8083, 8883, 9001]; // Try common secure WebSocket ports
-        const MQTT_TOPIC = 'v1/devices/me/telemetry';
-        const MQTT_USERNAME = 'zXKJxdn3i2yeTZdwKbgS';
+        // HTTP endpoint for ThingsBoard telemetry
+        const TELEMETRY_ENDPOINT = "http://www-dev.seag.cloud:8080/api/v1/zXKJxdn3i2yeTZdwKbgS/telemetry";
 
         let currentHeading = 0;
-        let mqttClient = null;
+        let serverConnected = false;
         let lastSentHeading = null;
 
-        // Initialize MQTT connection
-        function initMQTT() {
-            let currentPortIndex = 0;
-            let connectionTimeout = null;
-
-            function tryConnect() {
-                if (currentPortIndex >= MQTT_PORTS.length) {
-                    console.error('All MQTT ports failed');
-                    document.getElementById('mqtt-status').innerHTML = '❌ All MQTT ports failed';
-                    document.getElementById('mqtt-status').className = 'disconnected';
-                    return;
-                }
-
-                const port = MQTT_PORTS[currentPortIndex];
-                const mqttUrl = `wss://${MQTT_BROKER}:${port}`;
-                console.log(`Attempting MQTT connection to: ${mqttUrl} (port ${port})`);
-                document.getElementById('mqtt-status').innerHTML = `🔄 Trying port ${port}...`;
-                document.getElementById('mqtt-status').className = 'permission';
-
-                // Clear any existing timeout
-                if (connectionTimeout) {
-                    clearTimeout(connectionTimeout);
-                }
-
-                mqttClient = mqtt.connect(mqttUrl, {
-                    username: MQTT_USERNAME,
-                    clean: true,
-                    connectTimeout: 3000,
-                    reconnectPeriod: 0, // Disable auto-reconnect for port testing
-                });
-
-                // Set a timeout to try next port if no response
-                connectionTimeout = setTimeout(() => {
-                    console.log(`Timeout on port ${port}, trying next port...`);
-                    if (mqttClient) {
-                        mqttClient.end();
-                    }
-                    currentPortIndex++;
-                    tryConnect();
-                }, 5000);
-
-            mqttClient.on('connect', function () {
-                console.log(`Connected to MQTT broker on port ${MQTT_PORTS[currentPortIndex]}`);
-                if (connectionTimeout) {
-                    clearTimeout(connectionTimeout);
-                }
-                document.getElementById('mqtt-status').innerHTML = '✅ Connected to MQTT';
-                document.getElementById('mqtt-status').className = 'connected';
-            });
-
-            mqttClient.on('error', function (error) {
-                console.error(`MQTT connection error on port ${MQTT_PORTS[currentPortIndex]}:`, error);
-                if (connectionTimeout) {
-                    clearTimeout(connectionTimeout);
-                }
-                currentPortIndex++;
-                setTimeout(tryConnect, 1000); // Try next port after 1 second
-            });
-
-            mqttClient.on('offline', function () {
-                console.log('MQTT client offline');
-                document.getElementById('mqtt-status').innerHTML = '❌ MQTT offline';
-                document.getElementById('mqtt-status').className = 'disconnected';
-            });
-
-            mqttClient.on('reconnect', function () {
-                console.log('MQTT reconnecting...');
-                document.getElementById('mqtt-status').innerHTML = '🔄 MQTT reconnecting...';
-                document.getElementById('mqtt-status').className = 'permission';
-            });
-            }
-
-            // Start trying to connect
-            tryConnect();
-        }
-
-        // Send heading data via MQTT
+        // Send heading data to ThingsBoard via HTTP
         function sendHeading(heading) {
             // Only send if heading changed significantly (avoid spam)
             if (lastSentHeading !== null && Math.abs(heading - lastSentHeading) < 5) {
                 return;
             }
 
-            if (mqttClient && mqttClient.connected) {
-                const data = { heading: heading };
-                mqttClient.publish(MQTT_TOPIC, JSON.stringify(data), { qos: 1 }, function (error) {
-                    if (error) {
-                        console.error('Error publishing to MQTT:', error);
-                    } else {
-                        console.log('Heading sent via MQTT:', heading);
-                        lastSentHeading = heading;
+            const data = { heading: heading };
+
+            fetch(TELEMETRY_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                console.log("Response status:", response.status);
+                if (response.ok) {
+                    if (!serverConnected) {
+                        document.getElementById('mqtt-status').innerHTML = '✅ Connected to ThingsBoard';
+                        document.getElementById('mqtt-status').className = 'connected';
+                        serverConnected = true;
                     }
-                });
-            } else {
-                console.log('MQTT client not connected, cannot send heading');
-            }
+                    lastSentHeading = heading;
+                    console.log("Heading sent successfully:", heading);
+                } else {
+                    return response.text().then(text => {
+                        console.error("Server response:", text);
+                        throw new Error(`HTTP ${response.status}: ${text}`);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error("Error sending to ThingsBoard:", error);
+                document.getElementById('mqtt-status').innerHTML = `❌ Connection error: ${error.message}`;
+                document.getElementById('mqtt-status').className = 'disconnected';
+                serverConnected = false;
+            });
         }
 
         // Handle device orientation
@@ -240,8 +179,10 @@
             }
         }, 5000);
 
-        // Initialize MQTT connection on load
-        initMQTT();
+        // Test connection on load
+        setTimeout(() => {
+            sendHeading(0);
+        }, 1000);
     </script>
 </body>
 </html>

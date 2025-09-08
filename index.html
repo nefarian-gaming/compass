@@ -97,6 +97,7 @@
         // Initialize MQTT connection
         function initMQTT() {
             let currentPortIndex = 0;
+            let connectionTimeout = null;
 
             function tryConnect() {
                 if (currentPortIndex >= MQTT_PORTS.length) {
@@ -109,22 +110,45 @@
                 const port = MQTT_PORTS[currentPortIndex];
                 const mqttUrl = `wss://${MQTT_BROKER}:${port}`;
                 console.log(`Attempting MQTT connection to: ${mqttUrl} (port ${port})`);
+                document.getElementById('mqtt-status').innerHTML = `🔄 Trying port ${port}...`;
+                document.getElementById('mqtt-status').className = 'permission';
+
+                // Clear any existing timeout
+                if (connectionTimeout) {
+                    clearTimeout(connectionTimeout);
+                }
 
                 mqttClient = mqtt.connect(mqttUrl, {
                     username: MQTT_USERNAME,
                     clean: true,
-                    connectTimeout: 4000,
-                    reconnectPeriod: 1000,
+                    connectTimeout: 3000,
+                    reconnectPeriod: 0, // Disable auto-reconnect for port testing
                 });
 
+                // Set a timeout to try next port if no response
+                connectionTimeout = setTimeout(() => {
+                    console.log(`Timeout on port ${port}, trying next port...`);
+                    if (mqttClient) {
+                        mqttClient.end();
+                    }
+                    currentPortIndex++;
+                    tryConnect();
+                }, 5000);
+
             mqttClient.on('connect', function () {
-                console.log('Connected to MQTT broker');
+                console.log(`Connected to MQTT broker on port ${MQTT_PORTS[currentPortIndex]}`);
+                if (connectionTimeout) {
+                    clearTimeout(connectionTimeout);
+                }
                 document.getElementById('mqtt-status').innerHTML = '✅ Connected to MQTT';
                 document.getElementById('mqtt-status').className = 'connected';
             });
 
             mqttClient.on('error', function (error) {
                 console.error(`MQTT connection error on port ${MQTT_PORTS[currentPortIndex]}:`, error);
+                if (connectionTimeout) {
+                    clearTimeout(connectionTimeout);
+                }
                 currentPortIndex++;
                 setTimeout(tryConnect, 1000); // Try next port after 1 second
             });

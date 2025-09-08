@@ -12,7 +12,7 @@ app.use(express.json());
 app.post('/api/telemetry', async (req, res) => {
     try {
         console.log('📨 Received telemetry data:', req.body);
-        
+
         // Forward to ThingsBoard HTTP endpoint
         const response = await fetch('http://www-dev.seag.cloud:8080/api/v1/zXKJxdn3i2yeTZdwKbgS/telemetry', {
             method: 'POST',
@@ -28,25 +28,25 @@ app.post('/api/telemetry', async (req, res) => {
         } else {
             const errorText = await response.text();
             console.error('❌ ThingsBoard error:', response.status, errorText);
-            res.status(response.status).json({ 
-                success: false, 
-                error: `ThingsBoard error: ${response.status}` 
+            res.status(response.status).json({
+                success: false,
+                error: `ThingsBoard error: ${response.status}`
             });
         }
     } catch (error) {
         console.error('❌ Proxy error:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Proxy server error' 
+        res.status(500).json({
+            success: false,
+            error: 'Proxy server error'
         });
     }
 });
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        timestamp: new Date().toISOString() 
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString()
     });
 });
 

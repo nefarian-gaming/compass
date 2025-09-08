@@ -83,14 +83,14 @@
     </div>
 
     <script>
-        // HTTP endpoint for ThingsBoard telemetry
-        const TELEMETRY_ENDPOINT = "http://www-dev.seag.cloud:8080/api/v1/zXKJxdn3i2yeTZdwKbgS/telemetry";
+        // Simple HTTP proxy endpoint (deploy to Heroku/Railway/Render)
+        const PROXY_ENDPOINT = "https://your-app-name.herokuapp.com/api/telemetry";
 
         let currentHeading = 0;
         let serverConnected = false;
         let lastSentHeading = null;
 
-        // Send heading data to ThingsBoard via HTTP
+        // Send heading data via HTTP proxy
         function sendHeading(heading) {
             // Only send if heading changed significantly (avoid spam)
             if (lastSentHeading !== null && Math.abs(heading - lastSentHeading) < 5) {
@@ -99,7 +99,7 @@
 
             const data = { heading: heading };
 
-            fetch(TELEMETRY_ENDPOINT, {
+            fetch(PROXY_ENDPOINT, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

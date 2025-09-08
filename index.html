@@ -86,7 +86,7 @@
     <script>
         // MQTT Configuration
         const MQTT_BROKER = 'mqtt-dev.seag.cloud';
-        const MQTT_PORT = 8083; // WebSocket port (usually 8083 for MQTT over WebSocket)
+        const MQTT_PORT = 8083; // WebSocket port (browsers need WebSocket, not raw TCP)
         const MQTT_TOPIC = 'v1/devices/me/telemetry';
         const MQTT_USERNAME = 'zXKJxdn3i2yeTZdwKbgS';
 
@@ -97,6 +97,7 @@
         // Initialize MQTT connection
         function initMQTT() {
             const mqttUrl = `ws://${MQTT_BROKER}:${MQTT_PORT}`;
+            console.log('Attempting MQTT connection to:', mqttUrl);
 
             mqttClient = mqtt.connect(mqttUrl, {
                 username: MQTT_USERNAME,

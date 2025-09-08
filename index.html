@@ -86,7 +86,7 @@
     <script>
         // MQTT Configuration
         const MQTT_BROKER = 'mqtt-dev.seag.cloud';
-        const MQTT_PORT = 8083; // WebSocket port (browsers need WebSocket, not raw TCP)
+        const MQTT_PORTS = [8083, 8883, 9001]; // Try common secure WebSocket ports
         const MQTT_TOPIC = 'v1/devices/me/telemetry';
         const MQTT_USERNAME = 'zXKJxdn3i2yeTZdwKbgS';
 
@@ -96,15 +96,26 @@
 
         // Initialize MQTT connection
         function initMQTT() {
-            const mqttUrl = `ws://${MQTT_BROKER}:${MQTT_PORT}`;
-            console.log('Attempting MQTT connection to:', mqttUrl);
+            let currentPortIndex = 0;
 
-            mqttClient = mqtt.connect(mqttUrl, {
-                username: MQTT_USERNAME,
-                clean: true,
-                connectTimeout: 4000,
-                reconnectPeriod: 1000,
-            });
+            function tryConnect() {
+                if (currentPortIndex >= MQTT_PORTS.length) {
+                    console.error('All MQTT ports failed');
+                    document.getElementById('mqtt-status').innerHTML = '❌ All MQTT ports failed';
+                    document.getElementById('mqtt-status').className = 'disconnected';
+                    return;
+                }
+
+                const port = MQTT_PORTS[currentPortIndex];
+                const mqttUrl = `wss://${MQTT_BROKER}:${port}`;
+                console.log(`Attempting MQTT connection to: ${mqttUrl} (port ${port})`);
+
+                mqttClient = mqtt.connect(mqttUrl, {
+                    username: MQTT_USERNAME,
+                    clean: true,
+                    connectTimeout: 4000,
+                    reconnectPeriod: 1000,
+                });
 
             mqttClient.on('connect', function () {
                 console.log('Connected to MQTT broker');
@@ -113,9 +124,9 @@
             });
 
             mqttClient.on('error', function (error) {
-                console.error('MQTT connection error:', error);
-                document.getElementById('mqtt-status').innerHTML = `❌ MQTT error: ${error.message}`;
-                document.getElementById('mqtt-status').className = 'disconnected';
+                console.error(`MQTT connection error on port ${MQTT_PORTS[currentPortIndex]}:`, error);
+                currentPortIndex++;
+                setTimeout(tryConnect, 1000); // Try next port after 1 second
             });
 
             mqttClient.on('offline', function () {
@@ -129,6 +140,10 @@
                 document.getElementById('mqtt-status').innerHTML = '🔄 MQTT reconnecting...';
                 document.getElementById('mqtt-status').className = 'permission';
             });
+            }
+
+            // Start trying to connect
+            tryConnect();
         }
 
         // Send heading data via MQTT

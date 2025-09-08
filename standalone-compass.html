@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iPhone Compass to MQTT</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .compass {
+            width: 200px;
+            height: 200px;
+            border: 3px solid white;
+            border-radius: 50%;
+            margin: 20px auto;
+            position: relative;
+            background: rgba(255,255,255,0.1);
+        }
+        .needle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 2px;
+            height: 80px;
+            background: red;
+            transform-origin: bottom center;
+            transform: translate(-50%, -100%);
+            transition: transform 0.1s ease;
+        }
+        .center-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .heading {
+            font-size: 2em;
+            margin: 20px 0;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .connected { background: rgba(0,255,0,0.3); }
+        .disconnected { background: rgba(255,0,0,0.3); }
+        .permission { background: rgba(255,255,0,0.3); }
+        .instructions {
+            margin-top: 30px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <h1>iPhone Compass to MQTT</h1>
+
+    <div class="compass">
+        <div class="needle" id="needle"></div>
+        <div class="center-dot"></div>
+    </div>
+
+    <div class="heading" id="heading">0°</div>
+
+    <div class="status" id="status">Requesting permission...</div>
+
+    <div id="mqtt-status">Ready to send data...</div>
+
+    <div class="instructions">
+        <p>📱 Save this page to your iPhone home screen for easy access</p>
+        <p>🔄 Compass data is sent every 5 seconds</p>
+    </div>
+
+    <script>
+        const MQTT_ENDPOINT = "http://www-dev.seag.cloud:8080/api/v1/zXKJxdn3i2yeTZdwKbgS/telemetry";
+
+        let currentHeading = 0;
+        let serverConnected = false;
+        let lastSentHeading = null;
+
+        // Send heading data to MQTT endpoint
+        function sendHeading(heading) {
+            // Only send if heading changed significantly (avoid spam)
+            if (lastSentHeading !== null && Math.abs(heading - lastSentHeading) < 5) {
+                return;
+            }
+
+            const data = { heading: heading };
+
+            fetch(MQTT_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (response.ok) {
+                    if (!serverConnected) {
+                        document.getElementById('mqtt-status').innerHTML = '✅ Connected to MQTT';
+                        document.getElementById('mqtt-status').className = 'connected';
+                        serverConnected = true;
+                    }
+                    lastSentHeading = heading;
+                    console.log("Heading sent:", heading);
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            })
+            .catch(error => {
+                console.error("Error sending to MQTT:", error);
+                document.getElementById('mqtt-status').innerHTML = '❌ MQTT connection error';
+                document.getElementById('mqtt-status').className = 'disconnected';
+                serverConnected = false;
+            });
+        }
+
+        // Handle device orientation
+        function handleOrientation(event) {
+            const alpha = event.alpha; // Compass heading (0-360)
+
+            if (alpha !== null) {
+                currentHeading = Math.round(alpha);
+
+                // Update display
+                document.getElementById('heading').textContent = currentHeading + '°';
+                document.getElementById('needle').style.transform =
+                    `translate(-50%, -100%) rotate(${alpha}deg)`;
+            }
+        }
+
+        // Request permission and start listening
+        if (typeof DeviceOrientationEvent !== 'undefined' &&
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS 13+ requires permission
+            document.getElementById('status').innerHTML = 'Tap to enable compass';
+            document.getElementById('status').className = 'permission';
+
+            document.addEventListener('click', () => {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            document.getElementById('status').innerHTML = '✅ Compass active';
+                            document.getElementById('status').className = 'connected';
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        } else {
+                            document.getElementById('status').innerHTML = '❌ Permission denied';
+                            document.getElementById('status').className = 'disconnected';
+                        }
+                    });
+            });
+        } else {
+            // Older browsers or non-iOS
+            document.getElementById('status').innerHTML = '✅ Compass active';
+            document.getElementById('status').className = 'connected';
+            window.addEventListener('deviceorientation', handleOrientation);
+        }
+
+        // Send heading every 5 seconds
+        setInterval(() => {
+            if (currentHeading !== null) {
+                sendHeading(currentHeading);
+            }
+        }, 5000);
+
+        // Test connection on load
+        setTimeout(() => {
+            sendHeading(0);
+        }, 1000);
+    </script>
+</body>
+</html>

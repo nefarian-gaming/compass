@@ -79,7 +79,7 @@
 
     <div class="instructions">
         <p>📱 Save this page to your iPhone home screen for easy access</p>
-        <p>🔄 Compass data is sent every 5 seconds</p>
+        <p>🔄 Compass data is sent every second for smooth updates</p>
     </div>
 
     <script>
@@ -92,8 +92,8 @@
 
         // Send heading data via HTTP proxy
         function sendHeading(heading) {
-            // Only send if heading changed significantly (avoid spam)
-            if (lastSentHeading !== null && Math.abs(heading - lastSentHeading) < 5) {
+            // Only send if heading changed by 1 degree or more (smooth updates)
+            if (lastSentHeading !== null && Math.abs(heading - lastSentHeading) < 1) {
                 return;
             }
 
@@ -172,12 +172,12 @@
             window.addEventListener('deviceorientation', handleOrientation);
         }
 
-        // Send heading every 5 seconds
+        // Send heading every 1 second for smooth updates
         setInterval(() => {
             if (currentHeading !== null) {
                 sendHeading(currentHeading);
             }
-        }, 5000);
+        }, 1000);
 
         // Test connection on load
         setTimeout(() => {
